@@ -11,6 +11,7 @@ require 'yaml'
 require 'digest/md5'
 require 'net/http'
 require 'uri'
+require 'less'
 
 module Jekyll
 
@@ -128,7 +129,7 @@ END
       }
     }
     @@current_config = nil
-    @@supported_types = ['js', 'css']
+    @@supported_types = ['js', 'css', 'less']
     attr_reader :content, :hash, :filename, :base
 
     def initialize(files, type, context)
@@ -224,6 +225,13 @@ END
           f = "http:#{f}" if !$1
           f.sub!( /^https/i, "http" ) if $1 =~ /^https/i
           @content.concat(remote_asset_cache(URI(f)))
+        elsif f =~ /\.less$/
+          less_file_path = File.join(src, f)
+          less_parser = Less::Parser.new :paths => [File.dirname(less_file_path)]
+          tree = less_parser.parse(File.read(less_file_path))
+          @content.concat(tree.to_css)
+          f = f.sub(/\.less$/, ".css")
+          @type = "css"
         else
           @content.concat(File.read(File.join(src, f)))
         end
@@ -250,13 +258,13 @@ END
     end
 
     def cache_dir()
-	    plugin_conf = @context.registers[:site].plugins
-			# Hack for jekyll versions before 0.12.0
-			if plugin_conf.kind_of?(Array)
-			  plugin_dir = plugin_conf.first
-		  else
-		    plugin_dir = plugin_conf
-		  end
+      plugin_conf = @context.registers[:site].plugins
+      # Hack for jekyll versions before 0.12.0
+      if plugin_conf.kind_of?(Array)
+        plugin_dir = plugin_conf.first
+      else
+        plugin_dir = plugin_conf
+      end
       cache_dir = File.expand_path( "../_asset_bundler_cache", plugin_dir)
       if( !File.directory?(cache_dir) )
         FileUtils.mkdir_p(cache_dir)
